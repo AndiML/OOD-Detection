@@ -1,0 +1,9 @@
+# Ignores Python temporary compilation output
+__pycache__
+*.pyc
+
+# Ignore operating system icon databases
+.DS_Store
+Thumbs.db
+
+./datasets
