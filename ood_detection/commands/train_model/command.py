@@ -1,7 +1,9 @@
 """Represents a module that contains the command for the download of the respective dataset."""
 
+import csv
 import logging
 from argparse import Namespace
+import os
 import matplotlib.pyplot as plt
 import torch
 from tqdm import tqdm
@@ -10,7 +12,6 @@ from ood_detection.commands.base import BaseCommand
 from ood_detection.src.datasets.dataset import Dataset
 from ood_detection.src.models.variational_autoencoder import  AutoDynamicVariationalAutoencoder
 from ood_detection.src.models.autoencoder import  AutoDynamicAutoencoder
-from ood_detection.src.datasets.data_partitioner import DataPartitioner
 import torch.nn as nn
 
 
@@ -63,14 +64,18 @@ class TrainModelCommand(BaseCommand):
 
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-        # Load pre-trained weights if available.
+        # If you have pretrained weights, you can load them.
         # model.load_state_dict(torch.load("auto_dynamic_vae.pth"))
 
         # Set up a cosine annealing scheduler.
-        num_epochs = 10
+        num_epochs = 1
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
 
         print_interval = 10
+
+        # Lists to store metrics for each epoch.
+        train_losses = []
+        val_losses = []
 
         for epoch in range(1, num_epochs + 1):
             model.train()
@@ -93,6 +98,7 @@ class TrainModelCommand(BaseCommand):
                     progress_bar.set_postfix(loss=f"{loss.item():.4f}")
 
             avg_train_loss = running_loss / len(train_loader)
+            train_losses.append(avg_train_loss)
             print(f"Epoch [{epoch}/{num_epochs}] Average Training Loss: {avg_train_loss:.4f}")
 
             # Evaluate on the validation set.
@@ -105,6 +111,7 @@ class TrainModelCommand(BaseCommand):
                     loss = criterion(inputs, outputs, mean, log_var)
                     val_loss += loss.item()
             avg_val_loss = val_loss / len(validation_loader)
+            val_losses.append(avg_val_loss)
             print(f"Epoch [{epoch}] Validation Loss: {avg_val_loss:.4f}")
 
             # Step the scheduler.
@@ -114,32 +121,50 @@ class TrainModelCommand(BaseCommand):
         torch.save(model.state_dict(), "test.pth")
         print("Model saved as test.pth")
 
+        # Save the training and validation metrics to a CSV file.
+        metrics_file = "metrics.csv"
+        with open(metrics_file, mode='w', newline='') as csv_file:
+            fieldnames = ['epoch', 'train_loss', 'val_loss']
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+            writer.writeheader()
+            for epoch in range(num_epochs):
+                writer.writerow({
+                    'epoch': epoch + 1,
+                    'train_loss': train_losses[epoch],
+                    'val_loss': val_losses[epoch]
+                })
+        print(f"Metrics saved to {metrics_file}")
 
         # ------------------------------
         # Variational Inference Section
         # ------------------------------
-        # Now we perform inference: get latent variables for some test images.
-        # Typically, you want to obtain the mean (mu) and log variance (logvar) for each image.
+        # Create a folder to save inference images.
+        inference_dir = "inference_images"
+        os.makedirs(inference_dir, exist_ok=True)
+
         model.eval()
         with torch.no_grad():
             print("Performing variational inference on test data...")
             for batch_idx, (inputs, _) in enumerate(test_loader):
                 inputs = inputs.to(device)
                 reconstruction, mu, logvar = model(inputs)
-                # Here you can, for example, print the latent mean and log variance.
+
+                # Print latent variables.
                 print(f"Sample {batch_idx}:")
                 print("Latent mean (mu):", mu.cpu().numpy())
                 print("Latent log variance (logvar):", logvar.cpu().numpy())
 
-                # Optionally, sample a latent vector using reparameterization:
+                # Sample a latent vector using reparameterization.
                 std = torch.exp(0.5 * logvar)
                 eps = torch.randn_like(std)
                 z = mu + eps * std
                 print("Sampled latent vector (z):", z.cpu().numpy())
 
-                # Also, visualize original and reconstructed images.
+                # Visualize and save original and reconstructed images.
+                # Assuming the image tensor shape is (batch, channels, height, width).
                 original = inputs[0].cpu().numpy().transpose(1, 2, 0)
                 reconstructed = reconstruction[0].cpu().numpy().transpose(1, 2, 0)
+
                 plt.figure(figsize=(8, 4))
                 plt.subplot(1, 2, 1)
                 plt.imshow(original.squeeze(), cmap='gray' if input_shape[0] == 1 else None)
@@ -149,8 +174,13 @@ class TrainModelCommand(BaseCommand):
                 plt.imshow(reconstructed.squeeze(), cmap='gray' if input_shape[0] == 1 else None)
                 plt.title("Reconstructed")
                 plt.axis('off')
-                plt.show()
 
-                # Break after a few samples (or remove break to process all)
+                # Save the figure.
+                image_path = os.path.join(inference_dir, f"sample_{batch_idx}.png")
+                plt.savefig(image_path)
+                plt.close()
+                print(f"Saved inference image: {image_path}")
+
+                # Optionally, process a few samples (here we break after 3 samples).
                 if batch_idx >= 2:
                     break
