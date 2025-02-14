@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 [![Python Version](https://img.shields.io/badge/python-3.8%2C%203.9%2C%203.10-blue.svg)](https://www.python.org/downloads/)
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=fff)](#)
-[![Contributors](https://img.shields.io/github/contributors/AndiML/Action-Recognition-System.svg)
+![Contributors](https://img.shields.io/github/contributors/AndiML/Action-Recognition-System.svg)
 
 ## Overview
 
