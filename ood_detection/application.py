@@ -52,7 +52,7 @@ class Application:
 
     def run(self) -> None:
         """Runs the application. This is the actual entry-point to the application."""
-        os.environ['TQDM_DISABLE'] = "1"
+        # os.environ['TQDM_DISABLE'] = "1"
         # Env variable has to be set here to disable the progressbar
         # It is not clear why it is the case
 
@@ -150,8 +150,8 @@ class Application:
 
         # Creates a command line argument parser for the application
         argument_parser = argparse.ArgumentParser(
-            prog='federated_learning',
-            description='A command line tool for experiments for Federated Learning.',
+            prog='ood_detection',
+            description='A command line tool for experiments for OOD Detection.',
             add_help=False
         )
 
@@ -168,7 +168,7 @@ class Application:
             '-v',
             '--version',
             action='version',
-            version=f'Federated Learning Experiments {__version__}',
+            version=f'OOD Detection Experiments {__version__}',
             help='Displays the version string of the application and exits.'
         )
 
