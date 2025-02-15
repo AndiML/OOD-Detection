@@ -1,17 +1,11 @@
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.functional
 
 from ood_detection.src.models.base_model import BaseModel
+from ood_detection.src.helper.utils import compute_conv_output_size
 
-
-def compute_conv_output_size(size: int, kernel_size: int, stride: int, padding: int, dilation: int = 1) -> int:
-    """
-    Computes the output size of a convolutional layer along one dimension.
-    """
-    return math.floor((size + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1)
 
 
 class AutoDynamicAutoencoder(BaseModel):
@@ -49,7 +43,7 @@ class AutoDynamicAutoencoder(BaseModel):
                                            If None, defaults are chosen based on input_size.
             noise_std (float): Standard deviation of Gaussian noise to inject during training (default: 0.0).
         """
-        super(AutoDynamicAutoencoder, self).__init__()
+        super(AutoDynamicAutoencoder, self).__init__(task_type='reconstruction')
         self.noise_std = noise_std
         # Set default parameters based on the input size if not provided.
         if input_size <= 50:
@@ -140,5 +134,5 @@ class AutoDynamicAutoencoder(BaseModel):
         for deconv in self.decoder_deconvs:
             x = F.relu(deconv(x))
 
-        reconstruction = torch.nn.functional.sigmoid(x)
+        reconstruction = F.sigmoid(x)
         return reconstruction

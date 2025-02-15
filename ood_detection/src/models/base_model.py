@@ -7,9 +7,10 @@ import torch
 
 class BaseModel(ABC, torch.nn.Module):
     """Represents the abstract base class for all models."""
-    def __init__(self) -> None:
+    def __init__(self, task_type: str) -> None:
         """_Initializes a BaseModel instance."""
 
+        self.task_type = task_type
         super(BaseModel, self).__init__()
 
     @abstractmethod

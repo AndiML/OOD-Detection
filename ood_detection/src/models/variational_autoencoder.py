@@ -1,4 +1,3 @@
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,7 +39,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
             base_channels (int): Number of output channels for the first convolution.
             noise_std (float): Standard deviation for Gaussian noise injected during training.
         """
-        super(AutoDynamicVariationalAutoencoder, self).__init__()
+        super(AutoDynamicVariationalAutoencoder, self).__init__(task_type='reconstruction')
         self.noise_std = noise_std
 
         # Set default parameters based on the input size if not provided.
