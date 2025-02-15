@@ -6,13 +6,6 @@ import torch.nn.functional as F
 from ood_detection.src.models.base_model import BaseModel
 from ood_detection.src.helper.utils import compute_conv_output_size
 
-def compute_conv_output_size(size: int, kernel_size: int, stride: int, padding: int, dilation: int = 1) -> int:
-    """
-    Computes the output size of a convolutional layer along one dimension.
-    """
-    return math.floor((size + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1)
-
-
 class AutoDynamicVariationalAutoencoder(BaseModel):
     """
     A variational autoencoder (VAE) that automatically builds its convolutional layers
@@ -35,7 +28,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
                  min_feature_size: int = 4,
                  base_channels: int = 32,
                  noise_std: float = 0.0,
-                 use_maxpool: bool = False) -> None:
+        ) -> None:
         """
         Initializes the AutoDynamicVariationalAutoencoder instance.
 
@@ -46,12 +39,9 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
             min_feature_size (int): Minimum spatial dimension allowed in the encoder.
             base_channels (int): Number of output channels for the first convolution.
             noise_std (float): Standard deviation for Gaussian noise injected during training.
-            use_maxpool (bool): If True, use explicit max pooling (conv stride=1 + max pool);
-                                otherwise, use strided convolutions.
         """
         super(AutoDynamicVariationalAutoencoder, self).__init__()
         self.noise_std = noise_std
-        self.use_maxpool = use_maxpool
 
         # Set default parameters based on the input size if not provided.
         if input_size <= 50:
@@ -75,30 +65,16 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
 
         # Build the encoder layers until the spatial size is reduced to the minimum.
         while current_size > min_feature_size:
-            if self.use_maxpool:
-                # Use a conv layer with stride=1 followed by max pooling for downsampling.
-                conv_layer = nn.Conv2d(
-                    in_channels=current_channels,
-                    out_channels=out_channels,
-                    kernel_size=3,
-                    stride=1,
-                    padding=0
-                )
-                pool_layer = nn.MaxPool2d(kernel_size=2, stride=2)
-                encoder_block = nn.Sequential(conv_layer, nn.ReLU(), pool_layer)
-                self.encoder_convs.append(encoder_block)
-                current_size = compute_conv_output_size(current_size, kernel_size=3, stride=1, padding=0)
-            else:
-                # Use a strided convolution for downsampling.
-                conv_layer = nn.Conv2d(
-                    in_channels=current_channels,
-                    out_channels=out_channels,
-                    kernel_size=3,
-                    stride=2,
-                    padding=1
-                )
-                self.encoder_convs.append(conv_layer)
-                current_size = compute_conv_output_size(current_size, kernel_size=3, stride=2, padding=1)
+            # Use a strided convolution for downsampling.
+            conv_layer = nn.Conv2d(
+                in_channels=current_channels,
+                out_channels=out_channels,
+                kernel_size=3,
+                stride=2,
+                padding=1
+            )
+            self.encoder_convs.append(conv_layer)
+            current_size = compute_conv_output_size(current_size, kernel_size=3, stride=2, padding=1)
             self.encoder_channels.append((current_channels, out_channels))
             current_channels = out_channels
             out_channels *= 2  # Double channels at each layer.
@@ -117,33 +93,19 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
         self.decoder_deconvs = nn.ModuleList()
         # Reverse the list of channel pairs for decoder construction.
         reversed_channels = self.encoder_channels[::-1]
-        if self.use_maxpool:
-            # If max pooling was used in the encoder, mirror it with upsampling.
-            for idx, (in_ch, out_ch) in enumerate(reversed_channels):
-                upsample_layer = nn.Upsample(scale_factor=2, mode='nearest')
-                conv_layer = nn.Conv2d(
-                    in_channels=out_ch,
-                    out_channels=in_ch,
-                    kernel_size=3,
-                    stride=1,
-                    padding=0
-                )
-                decoder_block = nn.Sequential(upsample_layer, conv_layer, nn.ReLU())
-                self.decoder_deconvs.append(decoder_block)
-        else:
-            # Otherwise, use transposed convolutions to upsample.
-            for idx, (in_ch, out_ch) in enumerate(reversed_channels):
-                # Adjust output_padding for the first layer if needed.
-                op = 0 if idx == 0 else 1
-                deconv_layer = nn.ConvTranspose2d(
-                    in_channels=out_ch,
-                    out_channels=in_ch,
-                    kernel_size=3,
-                    stride=2,
-                    padding=1,
-                    output_padding=op
-                )
-                self.decoder_deconvs.append(deconv_layer)
+        # Otherwise, use transposed convolutions to upsample.
+        for idx, (in_ch, out_ch) in enumerate(reversed_channels):
+            # Adjust output_padding for the first layer if needed.
+            op = 0 if idx == 0 else 1
+            deconv_layer = nn.ConvTranspose2d(
+                in_channels=out_ch,
+                out_channels=in_ch,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                output_padding=op
+            )
+            self.decoder_deconvs.append(deconv_layer)
 
     def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
         """
@@ -180,7 +142,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
 
         # Encoder: pass through convolutional layers.
         for layer in self.encoder_convs:
-            x = layer(x) if self.use_maxpool else F.relu(layer(x))
+            x =  F.relu(layer(x))
         x = x.view(x.size(0), -1)
 
         # Obtain latent distribution parameters.
@@ -193,7 +155,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
         x = self.fc_dec(z)
         x = x.view(x.size(0), self.final_channels, self.feature_map_size, self.feature_map_size)
         for layer in self.decoder_deconvs:
-            x = layer(x) if self.use_maxpool else F.relu(layer(x))
+            x = F.relu(layer(x))
         # Use sigmoid to constrain the output in [0, 1] (assuming normalized images).
         reconstruction = x
         return reconstruction, mu, logvar
@@ -226,7 +188,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
         for deconv in self.decoder_deconvs:
             x = F.relu(deconv(x))
 
-        reconstruction = torch.nn.functional.sigmoid(x)
+        reconstruction = F.sigmoid(x)
 
         return reconstruction
 
