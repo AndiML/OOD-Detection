@@ -32,8 +32,8 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
         input_channels: int,
         input_size: int,
         latent_dim: int,
-        min_feature_size: int = 4,
-        base_channels: int = 32,
+        min_feature_size: int =  None,
+        base_channels: int = None,
         noise_std: float = 0.0) -> None:
         """
         Initializes the AutoDynamicVAE instance.
@@ -42,8 +42,10 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
             input_channels (int): Number of channels in the input image.
             input_size (int): Spatial size of the input image.
             latent_dim (int): Dimensionality of the latent space.
-            min_feature_size (int): The minimum spatial dimension allowed in the encoder.
-            base_channels (int): The number of output channels for the first convolution.
+            min_feature_size (int, optional): The minimum spatial dimension allowed in the encoder.
+                                              If None, defaults are chosen based on input_size.
+            base_channels (int, optional): The number of output channels for the first convolution.
+                                           If None, defaults are chosen based on input_size.
             noise_std (float): Standard deviation for Gaussian noise to inject during training (default 0.0).
         """
         super(AutoDynamicVariationalAutoencoder, self).__init__()
@@ -192,7 +194,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
         for deconv in self.decoder_deconvs:
             x = F.relu(deconv(x))
 
-        reconstruction = x
+        reconstruction = torch.nn.functional.sigmoid(x)
 
         return reconstruction
 

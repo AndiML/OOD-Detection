@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.functional
 
 from ood_detection.src.models.base_model import BaseModel
 
@@ -127,21 +128,17 @@ class AutoDynamicAutoencoder(BaseModel):
             x = x + noise
 
         # Encoder
-        print('Encoder')
         for conv in self.encoder_convs:
-            print(x.shape)
             x = F.relu(conv(x))
         # Flatten the output of the last conv layer.
         x = x.view(x.size(0), -1)
         latent = self.fc_enc(x)
 
         # Decoder
-        print('Decoder')
         x = self.fc_dec(latent)
         x = x.view(x.size(0), self.final_channels, self.feature_map_size, self.feature_map_size)
         for deconv in self.decoder_deconvs:
-            print(x.shape)
             x = F.relu(deconv(x))
 
-        reconstruction = x
+        reconstruction = torch.nn.functional.sigmoid(x)
         return reconstruction
