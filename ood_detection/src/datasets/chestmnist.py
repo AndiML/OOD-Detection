@@ -28,7 +28,7 @@ class ChestMnist(Dataset):
         self.path = path
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.49361062,), (0.23800726,))
+            # torchvision.transforms.Normalize((0.49361062,), (0.23800726,))
         ])
         self._load_datasets()
 
