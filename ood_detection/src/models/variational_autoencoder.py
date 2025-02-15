@@ -82,12 +82,12 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
                     out_channels=out_channels,
                     kernel_size=3,
                     stride=1,
-                    padding=1
+                    padding=0
                 )
                 pool_layer = nn.MaxPool2d(kernel_size=2, stride=2)
                 encoder_block = nn.Sequential(conv_layer, nn.ReLU(), pool_layer)
                 self.encoder_convs.append(encoder_block)
-                current_size = compute_conv_output_size(current_size, kernel_size=3, stride=1, padding=1)
+                current_size = compute_conv_output_size(current_size, kernel_size=3, stride=1, padding=0)
             else:
                 # Use a strided convolution for downsampling.
                 conv_layer = nn.Conv2d(
@@ -126,7 +126,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
                     out_channels=in_ch,
                     kernel_size=3,
                     stride=1,
-                    padding=1
+                    padding=0
                 )
                 decoder_block = nn.Sequential(upsample_layer, conv_layer, nn.ReLU())
                 self.decoder_deconvs.append(decoder_block)
