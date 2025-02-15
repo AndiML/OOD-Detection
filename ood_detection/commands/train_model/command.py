@@ -48,30 +48,35 @@ class TrainModelCommand(BaseCommand):
         model = AutoDynamicVariationalAutoencoder(
             input_channels=input_shape[0],
             input_size=input_shape[1],
-            latent_dim=8 # For MedMNIST, 16 is a reasonable starting point.
+            latent_dim=32, use_maxpool=True  # For MedMNIST, 16 is a reasonable starting point.
         ).to(device)
-        print(model)
+
 
         # Define the loss function.
         def loss_function(x, x_hat, mean, log_var):
-            # Reconstruction loss using Mean Squared Error.
+            # Reconstruction loss using Mean Squared Error (summed over all pixels).
             reconstruction_loss = nn.functional.mse_loss(x_hat, x, reduction='sum')
             # Kullback-Leibler divergence.
             KLD = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
             return reconstruction_loss + KLD
 
         criterion = loss_function
-
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-        # If you have pretrained weights, you can load them.
-        # model.load_state_dict(torch.load("auto_dynamic_vae.pth"))
-
-        # Set up a cosine annealing scheduler.
-        num_epochs = 1
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+        # Set up the ReduceLROnPlateau scheduler.
+        num_epochs = 100
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+                                                               factor=0.1, patience=5,
+                                                               verbose=True)
 
         print_interval = 10
+
+        # Use experiment configuration (if provided) to name output files.
+        experiment_name = getattr(command_line_arguments, "experiment", "default_experiment")
+        model_filename = f"{experiment_name}_model.pth"
+        metrics_filename = f"{experiment_name}_metrics.csv"
+        inference_dir = os.path.join("inference_images", experiment_name)
+        os.makedirs(inference_dir, exist_ok=True)
 
         # Lists to store metrics for each epoch.
         train_losses = []
@@ -80,10 +85,11 @@ class TrainModelCommand(BaseCommand):
         for epoch in range(1, num_epochs + 1):
             model.train()
             running_loss = 0.0
-            # Progress bar for training batches.
-            progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch}/{num_epochs}")
 
-            for batch_idx, (inputs, _) in progress_bar:
+            # Training progress bar.
+            train_progress = tqdm(enumerate(train_loader), total=len(train_loader),
+                                  desc=f"Epoch {epoch}/{num_epochs} - Training", leave=False)
+            for batch_idx, (inputs, _) in train_progress:
                 inputs = inputs.to(device)
 
                 optimizer.zero_grad()
@@ -93,37 +99,38 @@ class TrainModelCommand(BaseCommand):
                 optimizer.step()
 
                 running_loss += loss.item()
-                # Update the progress bar with current loss.
                 if batch_idx % print_interval == 0:
-                    progress_bar.set_postfix(loss=f"{loss.item():.4f}")
+                    train_progress.set_postfix(loss=f"{loss.item():.4f}")
 
             avg_train_loss = running_loss / len(train_loader)
             train_losses.append(avg_train_loss)
             print(f"Epoch [{epoch}/{num_epochs}] Average Training Loss: {avg_train_loss:.4f}")
 
-            # Evaluate on the validation set.
+            # Validation phase with progress bar.
             model.eval()
             val_loss = 0.0
+            val_progress = tqdm(validation_loader, desc=f"Epoch {epoch}/{num_epochs} - Validation", leave=False)
             with torch.no_grad():
-                for inputs, _ in validation_loader:
+                for inputs, _ in val_progress:
                     inputs = inputs.to(device)
                     outputs, mean, log_var = model(inputs)
                     loss = criterion(inputs, outputs, mean, log_var)
                     val_loss += loss.item()
+                    val_progress.set_postfix(loss=f"{loss.item():.4f}")
+
             avg_val_loss = val_loss / len(validation_loader)
             val_losses.append(avg_val_loss)
-            print(f"Epoch [{epoch}] Validation Loss: {avg_val_loss:.4f}")
+            print(f"Epoch [{epoch}/{num_epochs}] Validation Loss: {avg_val_loss:.4f}")
 
-            # Step the scheduler.
-            scheduler.step()
+            # Step the scheduler using validation loss.
+            scheduler.step(avg_val_loss)
 
         # Save the trained model.
-        torch.save(model.state_dict(), "test.pth")
-        print("Model saved as test.pth")
+        torch.save(model.state_dict(), model_filename)
+        print(f"Model saved as {model_filename}")
 
         # Save the training and validation metrics to a CSV file.
-        metrics_file = "metrics.csv"
-        with open(metrics_file, mode='w', newline='') as csv_file:
+        with open(metrics_filename, mode='w', newline='') as csv_file:
             fieldnames = ['epoch', 'train_loss', 'val_loss']
             writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
             writer.writeheader()
@@ -133,15 +140,11 @@ class TrainModelCommand(BaseCommand):
                     'train_loss': train_losses[epoch],
                     'val_loss': val_losses[epoch]
                 })
-        print(f"Metrics saved to {metrics_file}")
+        print(f"Metrics saved to {metrics_filename}")
 
         # ------------------------------
         # Variational Inference Section
         # ------------------------------
-        # Create a folder to save inference images.
-        inference_dir = "inference_images"
-        os.makedirs(inference_dir, exist_ok=True)
-
         model.eval()
         with torch.no_grad():
             print("Performing variational inference on test data...")
@@ -175,12 +178,12 @@ class TrainModelCommand(BaseCommand):
                 plt.title("Reconstructed")
                 plt.axis('off')
 
-                # Save the figure.
-                image_path = os.path.join(inference_dir, f"sample_{batch_idx}.png")
+                # Save the inference image with an experiment-specific filename.
+                image_path = os.path.join(inference_dir, f"{experiment_name}_sample_{batch_idx}.png")
                 plt.savefig(image_path)
                 plt.close()
                 print(f"Saved inference image: {image_path}")
 
-                # Optionally, process a few samples (here we break after 3 samples).
+                # Process only a few samples (e.g., break after 3 samples).
                 if batch_idx >= 2:
                     break
