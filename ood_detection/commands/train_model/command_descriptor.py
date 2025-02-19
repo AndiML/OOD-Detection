@@ -60,9 +60,25 @@ class TrainModelCommandDescriptor(BaseCommandDescriptor):
             '--ood_datasets',
             type=str,
             nargs='+',
-            default=[DEFAULT_DATASET_ID],
+            default=[d for d in DATASET_IDS if d != DEFAULT_DATASET_ID],
             choices=DATASET_IDS,
             help='List of out-of-distribution datasets to use during experiments.'
+        )
+
+        parser.add_argument(
+            '-P',
+            '--partition_method',
+            type=str,
+            default='external',
+            choices=['internal', 'external'],
+            help='Method for partitioning the test set: external (default) or internal'
+        )
+        parser.add_argument(
+            '-L',
+            '--num_inliers',
+            type=int,
+            default=3,
+            help='Number of inlier classes to use for internal partitioning. Only used if partition_method is "internal".'
         )
 
         parser.add_argument(
@@ -147,57 +163,66 @@ class TrainModelCommandDescriptor(BaseCommandDescriptor):
             '-S',
             '--step_size',
             type=int,
-            help='Step size for StepLR scheduler.'
+            default=10,
+            help='Step size for StepLR scheduler (default: 10).'
         )
 
         parser.add_argument(
             '-G',
             '--gamma',
             type=float,
-            help='Decay factor for StepLR or ExponentialLR scheduler.'
+            default=0.1,
+            help='Decay factor for StepLR or ExponentialLR scheduler (default: 0.1).'
         )
 
         parser.add_argument(
             '-F',
             '--learning_rate_factor',
             type=float,
-            help='Factor by which the LR is reduced in ReduceLROnPlateau scheduler.'
+            default=0.1,
+            help='Factor by which the LR is reduced in ReduceLROnPlateau scheduler (default: 0.1).'
         )
 
         parser.add_argument(
             '-A',
             '--learning_rate_patience',
             type=int,
-            help='Number of epochs with no improvement before reducing LR in ReduceLROnPlateau scheduler.'
+            default=5,
+            help='Number of epochs with no improvement before reducing LR in ReduceLROnPlateau scheduler (default: 5).'
         )
 
         parser.add_argument(
             '-N',
             '--num_iteration_max',
             type=int,
-            help='Maximum iterations for CosineAnnealingLR scheduler.'
+            default=50,
+            help='Maximum iterations for CosineAnnealingLR scheduler (default: 50).'
         )
 
         parser.add_argument(
             '-R',
             '--minimum_learning_rate',
             type=float,
-            help='Minimum learning rate for cosine annealing schedulers.'
+            default=0.0,
+            help='Minimum learning rate for cosine annealing schedulers (default: 0.0).'
         )
 
         parser.add_argument(
             '-I',
             '--learning_increase_restart',
             type=int,
-            help='Factor for increasing the restart period in CosineAnnealingWarmRestarts scheduler.'
+            default=2,
+            help='Factor for increasing the restart period in CosineAnnealingWarmRestarts scheduler (default: 2).'
         )
 
         parser.add_argument(
             '-C',
             '--num_iteration_restart',
             type=int,
-            help='Number of iterations for a restart in CosineAnnealingWarmRestarts scheduler.'
+            default=10,
+            help='Number of iterations for a restart in CosineAnnealingWarmRestarts scheduler (default: 10).'
         )
+
 
         # Model-specific arguments
         parser.add_argument(
