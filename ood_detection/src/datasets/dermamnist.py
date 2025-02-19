@@ -14,48 +14,55 @@ class DermaMnist(Dataset):
     dataset_id = 'dermamnist'
     """Contains a machine-readable ID that uniquely identifies the dataset."""
 
-    def __init__(self, path: str) -> None:
-        """Initializes a new DermaMNIST instance.
+    def __init__(self, path: str, load_data: bool = True) -> None:
+        """
+        Initializes a new DermaMNIST instance.
 
         Args:
-            path (str): The path where the DermaMNIST dataset is stored. If it does not exist, it is automatically downloaded to the specified location.
+            path (str): The path where the DermaMNIST dataset is stored.
+            load_data (bool): If True, download and load the data. If False, only set metadata.
         """
-
-        # Stores the arguments
         self.path = path
-
-        # Exposes some information about the dataset
         self.name = 'DermaMNIST'
-        self.path = path
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize((0.76311266,), (0.13660511,))
         ])
-        self._load_datasets()
 
-    def _load_datasets(self)-> None:
+        # If load_data is True, load the full dataset. Otherwise, skip it.
+        if load_data:
+            self._load_datasets()
+        else:
+            # Set empty placeholders if data isn't loaded.
+            self._training_data = None
+            self._validation_data = None
+            self._test_data = None
+            self._training_labels = []
+            self._validation_labels = []
+            self._test_labels = []
+
+    def _load_datasets(self) -> None:
         """Loads all data."""
-
-        # Load training data
+        # Load training data.
         self._training_data = DermaMNIST(
             root=self.path, split='train', download=True, transform=self.transform
         )
         self._training_data.labels = [label[0] for label in self._training_data.labels]
         self._training_labels = self._training_data.labels
 
-        # Load validation data
+        # Load validation data.
         self._validation_data = DermaMNIST(
             root=self.path, split='val', download=True, transform=self.transform
         )
         self._validation_data.labels = [label[0] for label in self._validation_data.labels]
         self._validation_labels = self._validation_data.labels
 
-        # Load test data
+        # Load test data.
         self._test_data = DermaMNIST(
             root=self.path, split='test', download=True, transform=self.transform
         )
         self._test_data.labels = [label[0] for label in self._test_data.labels]
-        self._test_labels =  self._test_data.labels
+        self._test_labels = self._test_data.labels
 
 
     def get_training_labels(self) -> list[int]:
@@ -122,7 +129,7 @@ class DermaMnist(Dataset):
         Returns:
             tuple[int, ...]: Returns a tuple that contains the sizes of all dimensions of the samples.
         """
-        return tuple(self.training_data[0][0].shape)
+        return tuple(3, 28, 28)
 
     @property
     def number_of_classes(self) -> int:

@@ -13,12 +13,13 @@ class PathMnist(Dataset):
     dataset_id = 'pathmnist'
     """Contains a machine-readable ID that uniquely identifies the dataset."""
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, load_data: bool = True) -> None:
         """Initializes a new Mnist instance.
 
         Args:
             path (str): The path where the TissueMNIST dataset is stored. If it does not exist, it is automatically downloaded to the specified
                 location.
+             load_data (bool): If True, download and load the data. If False, only set metadata.
         """
 
         # Stores the arguments
@@ -31,7 +32,17 @@ class PathMnist(Dataset):
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize((0.7405458,), (0.12368218,))
         ])
-        self._load_datasets()
+        # If load_data is True, load the full dataset. Otherwise, skip it.
+        if load_data:
+            self._load_datasets()
+        else:
+            # Set empty placeholders if data isn't loaded.
+            self._training_data = None
+            self._validation_data = None
+            self._test_data = None
+            self._training_labels = []
+            self._validation_labels = []
+            self._test_labels = []
 
     def _load_datasets(self)-> None:
         """Loads all data."""
@@ -120,7 +131,7 @@ class PathMnist(Dataset):
         Returns:
             tuple[int, ...]: Returns a tuple that contains the sizes of all dimensions of the samples.
         """
-        return tuple(self.training_data[0][0].shape)
+        return tuple(3, 28, 28)
 
     @property
     def number_of_classes(self) -> int:
