@@ -1,9 +1,8 @@
 import torch
-from torch.utils.data import Subset, ConcatDataset, DataLoader
-from typing import Any
+from torch.utils.data import Subset, ConcatDataset
 
 from ood_detection.src.datasets.dataset import Dataset, DatasetData
-from ood_detection.src.datasets.label_transformer import LabelTransformDataset
+from ood_detection.src.datasets.transformer import OODTransformer, TransformWrapperOOD
 
 class DataPartitioner:
     """
@@ -46,9 +45,15 @@ class DataPartitioner:
         """
         Wraps the known and unknown subsets with the label transformation and then concatenates them.
         """
-        known_dataset = LabelTransformDataset(known_subset, self.known_transform)
-        unknown_dataset = LabelTransformDataset(unknown_subset, self.unknown_transform)
+        desired_channels = self.in_dataset.sample_shape[0]
+        # Create a combined transformer for known and unknown samples.
+        known_transformer = OODTransformer(desired_channels=desired_channels, mode="known")
+        unknown_transformer = OODTransformer(desired_channels=desired_channels, mode="unknown")
+        # Wrap the subsets with our generic wrapper.
+        known_dataset = TransformWrapperOOD(known_subset, known_transformer)
+        unknown_dataset = TransformWrapperOOD(unknown_subset, unknown_transformer)
         self.combined_data = ConcatDataset([known_dataset, unknown_dataset])
+
 
     def partition_inliers(self, n_inliers: int):
         """
@@ -78,9 +83,9 @@ class DataPartitioner:
         as unknown OOD data.
         """
         ood_dataset = Dataset.create(ood_dataset_id, dataset_path)
-        known_dataset = LabelTransformDataset(self.in_dataset.test_data, self.known_transform)
-        unknown_dataset = LabelTransformDataset(ood_dataset.test_data, self.unknown_transform)
-        self.combined_data = ConcatDataset([known_dataset, unknown_dataset])
+        known_dataset = self.in_dataset.test_data
+        unknown_dataset = ood_dataset.test_data
+        self._combine(known_dataset, unknown_dataset)
 
 
     def partition(self, partition_method: str, num_inliers: int = 1,

@@ -1,29 +1,24 @@
 from ood_detection.src.datasets.dataset import Dataset
 
-def check_dataset_configuration(in_data_class_instance: object, ood_dataset_ids: list[str], logger) -> list[str]:
+def report_dataset_configuration(in_data_class_instance: object, ood_dataset_ids: list[str], logger):
     """
-    Checks that the in-distribution dataset and each OOD dataset have matching channel dimensions.
-    Incompatible OOD datasets are skipped. If none of the provided OOD datasets are compatible,
-    a ValueError is raised.
+    Checks the channel dimensions of the in-distribution dataset and each OOD dataset.
+    Since channel adaptation is applied later, this function only logs which OOD datasets
+    will have their channels adjusted:
+      - If an OOD dataset has fewer channels than the in-distribution data, it will be pre-duplicated.
+      - If an OOD dataset has more channels, only the first channel(s) will be used.
 
     Args:
         in_data_class_instance (object): An instance of the in-distribution dataset class.
         ood_dataset_ids (list[str]): List of dataset IDs for the OOD datasets.
-        dataset_path (str): Path to the dataset directory.
         logger: Logger instance for logging messages.
 
-    Returns:
-        list[str]: A list of OOD dataset IDs that have matching channel dimensions.
-
-    Raises:
-        ValueError: If none of the provided OOD datasets have matching channel dimensions.
     """
     in_dataset_id = in_data_class_instance.dataset_id
     in_sample_shape = in_data_class_instance.sample_shape
     in_channels = in_sample_shape[0]
     logger.info(f"In-distribution Dataset '{in_dataset_id}' sample shape: {in_sample_shape}")
 
-    valid_ood_ids = []
     for ood_id in ood_dataset_ids:
         try:
             # Create OOD dataset instance in metadata-only mode.
@@ -37,17 +32,15 @@ def check_dataset_configuration(in_data_class_instance: object, ood_dataset_ids:
         logger.info(f"OOD Dataset '{ood_id}' sample shape: {ood_sample_shape}")
 
         if ood_channels != in_channels:
-            logger.error(
-                f"Channel mismatch: In-distribution dataset '{in_dataset_id}' has {in_channels} channels, "
-                f"but OOD dataset '{ood_id}' has {ood_channels} channels. Skipping this OOD dataset."
-            )
+            if ood_channels < in_channels:
+                logger.info(
+                    f"OOD dataset '{ood_id}' has {ood_channels} channels. It will be pre-duplicated to match "
+                    f"the in-distribution channel count of {in_channels}."
+                )
+            else:  # ood_channels > in_channels
+                logger.info(
+                    f"OOD dataset '{ood_id}' has {ood_channels} channels. Only the first {in_channels} channel(s) "
+                    f"will be used to match the in-distribution data."
+                )
         else:
-            valid_ood_ids.append(ood_id)
-
-    if not valid_ood_ids:
-        msg = "No OOD datasets with matching channel dimensions were found."
-        logger.error(msg)
-        raise ValueError(msg)
-
-    logger.info(f"Valid OOD datasets for Comparison: {valid_ood_ids if len(valid_ood_ids) > 1 else valid_ood_ids[0]}")
-    return valid_ood_ids
+            logger.info(f"OOD dataset '{ood_id}' already has matching channel dimensions: {in_channels} channel(s).")
