@@ -3,8 +3,13 @@ import collections
 import os
 import torch
 
-from tqdm import tqdm
-
+from rich.progress import (
+    Progress,
+    BarColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    TimeElapsedColumn,
+)
 from abc import ABC, abstractmethod
 from ood_detection.src.experiments.tracker import ExperimentLogger
 
@@ -14,7 +19,7 @@ class BaseTrainer(ABC):
     logging of statistics via both a Python logger and an ExperimentLogger,
     model checkpointing, and integration of learning rate schedulers.
     Automatically registers subclasses based on a trainer identifier.
-    Inherited classes need to implement model-specific training and validation logic.
+    inherited classes need to implement model-specific training and validation logic.
     """
 
     _registry: dict[str, type["BaseTrainer"]] = {}
@@ -71,6 +76,19 @@ class BaseTrainer(ABC):
         self.best_epoch = 0
 
     @abstractmethod
+    def compute_anomaly(self, batch:  tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """
+        Computes the anomaly score for each batch.
+
+        Args:
+            batch ( tuple[torch.Tensor, torch.Tensor]): Input batch.
+
+        Returns:
+            torch.Tensor: A 1D tensor of anomaly scores, one per sample.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def train_step(self, batch: tuple[torch.Tensor, torch.Tensor]) ->  dict[str, float]:
         """
         Performs a single training step (forward, loss computation, backward, optimizer step)
@@ -114,18 +132,29 @@ class BaseTrainer(ABC):
             # Use a dictionary to accumulate sums of each metric
             running_metrics = collections.defaultdict(float)
 
-            with tqdm(total=self.num_train_batches, desc=f"Epoch {epoch}/{self.num_epochs}", unit="batch") as pbar:
+            # Use Rich progress bar for the training loop.
+            with Progress(
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TextColumn("{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+                transient=True
+            ) as progress:
+                task = progress.add_task(f"Epoch {epoch}/{self.num_epochs}", total=self.num_train_batches)
                 for batch_idx, batch in enumerate(self.train_loader, 1):
                     metrics = self.train_step(batch)
                     self.optimizer.step()
 
-                    # Accumulate each metric
+                    # Accumulate metrics
                     for key, value in metrics.items():
                         running_metrics[key] += value
 
-                    # Updates the  progress bar
-                    pbar.update(1)
-                    pbar.set_postfix({k: f"{v / batch_idx:.4f}" for k, v in running_metrics.items()})
+                    # Build a string for average metrics so far
+                    avg_metrics_str = " ".join(f"{k}:{(v / batch_idx):.4f}" for k, v in running_metrics.items())
+                    # Update progress bar: advance one batch and update description with metrics.
+                    progress.update(task, advance=1, description=f"Epoch {epoch}/{self.num_epochs} | {avg_metrics_str}")
 
             # Computes average metrics for the entire epoch
             epoch_metrics = {
@@ -134,8 +163,8 @@ class BaseTrainer(ABC):
             self.training_logger.info("Epoch %d Average Training Metrics: %s", epoch, epoch_metrics,  extra={'end_section': True})
 
             # Log training metrics via the experiment logger if provided
-            if self.experiment_logger is not None:
-                self.experiment_logger.log_model_metrics(epoch_metrics)
+            self.experiment_logger.begin_epoch(epoch)
+            self.experiment_logger.log_model_metrics(epoch_metrics)
 
             # Validate model
             self.validate(epoch)
@@ -146,35 +175,42 @@ class BaseTrainer(ABC):
         # Sets model into validation mode
         self.model.eval()
 
+        # Initialize a defaultdict for accumulating metrics, if not already defined.
+        running_metrics = collections.defaultdict(float)
+
         with torch.no_grad():
-
-            # Initialize a defaultdict for accumulating metrics, if not already defined.
-            running_metrics = collections.defaultdict(float)
-
-            with tqdm(total=self.num_val_batches, desc="Validation", unit="batch") as pbar:
+            with Progress(
+                TextColumn("[bold green]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TextColumn("{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+                transient=True
+            ) as progress:
+                task = progress.add_task("Validation", total=self.num_val_batches)
                 for batch in self.val_loader:
                     metrics = self.validation_step(batch)
                     for key, value in metrics.items():
                         running_metrics[key] += value
-
-                    # Update progress bar after processing each batch.
-                    pbar.update(1)
+                    progress.update(task, advance=1)
 
         # Average the metrics
         avg_metrics = {
             k: v / self.num_val_batches for k, v in running_metrics.items()
         }
         # Step scheduler if it exists
-        if self.scheduler is not None:
+        if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
             self.scheduler.step(avg_metrics['loss'])
-
+        else:
+            self.scheduler.step()
+        self.training_logger.info("Scheduler updated using %s scheduler.", type(self.scheduler).__name__)
         self.training_logger.info("Average Validation Metrics: %s", avg_metrics)
 
-        if self.experiment_logger is not None:
-            # Switch to validation phase
-            self.experiment_logger.val()
-            self.experiment_logger.log_model_metrics(avg_metrics)
-            self.experiment_logger.end_epoch()
+        # Switch to validation phase
+        self.experiment_logger.val()
+        self.experiment_logger.log_model_metrics(avg_metrics)
+        self.experiment_logger.end_epoch()
 
         # Check if the current validation loss is the best so far.
         current_val_loss = avg_metrics['loss']
