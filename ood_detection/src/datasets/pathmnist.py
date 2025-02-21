@@ -30,7 +30,7 @@ class PathMnist(Dataset):
         self.path = path
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.7405458,), (0.12368218,))
+            # torchvision.transforms.Normalize((0.7405458,), (0.12368218,))
         ])
         # If load_data is True, load the full dataset. Otherwise, skip it.
         if load_data:
@@ -131,7 +131,7 @@ class PathMnist(Dataset):
         Returns:
             tuple[int, ...]: Returns a tuple that contains the sizes of all dimensions of the samples.
         """
-        return tuple(3, 28, 28)
+        return tuple([3, 28, 28])
 
     @property
     def number_of_classes(self) -> int:

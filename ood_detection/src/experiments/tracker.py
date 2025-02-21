@@ -2,15 +2,17 @@
 
 import os
 import csv
+import yaml
 import logging
 from datetime import datetime
 from argparse import Namespace
 from typing import Any, Optional, Dict
 
-import torchvision
-import yaml  # type: ignore
+
 import torch
+import torchvision
 from torch.utils.tensorboard.writer import SummaryWriter
+from ood_detection.src.metrics.metrics_calculator import OODMetricsCalculator
 
 class ExperimentLogger:
     """
@@ -22,8 +24,8 @@ class ExperimentLogger:
       - (Optional) Logging OOD metrics using pytorch_ood.
 
     The logger expects a task type which defines the set of expected metrics:
-      - For 'reconstruction': expects ['Reconstruction_Error'].
-      - For 'classification': expects ['Accuracy', 'Loss'].
+      - For 'reconstruction': expects ['loss'].
+      - For 'classification': expects ['accuracy', 'loss'].
     """
 
     def __init__(
@@ -32,7 +34,6 @@ class ExperimentLogger:
         task_type: str,
         logger: logging.Logger,
         use_tensorboard: bool = False,
-        ood_logging: bool = True
     ) -> None:
         """
         Initializes the experiment logger.
@@ -42,14 +43,14 @@ class ExperimentLogger:
             task_type (str): Type of task (e.g., 'reconstruction', 'classification').
             logger(logging.Logger): Logger is provided to log metrics obtained during the training process directly to the command line.
             use_tensorboard (bool): If True, TensorBoard logging is enabled.
-            ood_logging (bool): If True, enables OOD metrics logging.
+
         """
         self.output_path = output_path
         os.makedirs(self.output_path, exist_ok=True)
         self.task_type = task_type
         self.logger = logger
         self.use_tensorboard = use_tensorboard
-        self.ood_logging = ood_logging
+        self.ood_metrics_calculator = OODMetricsCalculator()
         self.phase = "train"
 
         # Define expected metrics based on the task type
@@ -76,17 +77,6 @@ class ExperimentLogger:
         self.current_epoch: Optional[int] = None
         self.current_epoch_metrics: Dict[str, Any] = {}
 
-        # Initializes OOD metrics logging.
-        if self.ood_logging:
-            try:
-                from pytorch_ood.utils import OODMetrics
-                self.ood_metrics_calculator = OODMetrics()
-            except ImportError:
-                print("pytorch_ood is not installed. OOD logging will be disabled.")
-                self.ood_logging = False
-                self.ood_metrics_calculator = None
-        else:
-            self.ood_metrics_calculator = None
 
     def display_hyperparamter_for_in_data_training(self, command_line_arguments: Namespace) -> None:
         """Displays the parameters that are used during the training.
@@ -95,14 +85,27 @@ class ExperimentLogger:
             command_line_arguments (Namespace): The command line arguments that are used in the training process over the in distribution data.
 
         """
-        self.logger.info('\nExperimental details:')
-        self.logger.info(f'Model                             : {command_line_arguments.model_type.upper()}')
-        self.logger.info(f'Optimizer                         : {command_line_arguments.optimizer.upper()}')
-        self.logger.info(f'Learning Rate                     : {command_line_arguments.learning_rate}')
-        self.logger.info(f'Epochs                            : {command_line_arguments.epochs}\n')
-        self.logger.info('Training Parameters')
-        self.logger.info(f'Batch size                        : {command_line_arguments.batchsize}')
-        self.logger.info(f' GPU enabled:                     : {command_line_arguments.use_gpu}\n')
+        # Build a dictionary of the most interesting hyperparameters.
+        hyperparams = {
+            "Model": command_line_arguments.model_type.upper(),
+            "Optimizer": command_line_arguments.optimizer.upper(),
+            "Scheduler": command_line_arguments.scheduler.upper(),
+            "Learning Rate": command_line_arguments.learning_rate,
+            "Epochs": command_line_arguments.epochs,
+            "Batch Size": command_line_arguments.batchsize,
+            "Momentum": command_line_arguments.momentum,
+            "Weight Decay": command_line_arguments.weight_decay,
+            "Latent Dim": command_line_arguments.latent_dim,
+            "Min Feature Size": command_line_arguments.min_feature_size,
+            "Base Channels": command_line_arguments.base_channels,
+            "Noise Std": command_line_arguments.noise_std,
+            "Use GPU": command_line_arguments.use_gpu,
+        }
+
+        self.logger.info("\nExperimental Details:")
+        for key, value in hyperparams.items():
+            # Use formatting for neat alignment.
+            self.logger.info(f"[blue]{key:20s}: {value}[/blue]")
 
     def save_hyperparameters(self, hyperparameters: Dict[str, Any]) -> None:
         """
@@ -203,38 +206,70 @@ class ExperimentLogger:
         self.csv_writer.writerow(row)
         self.metrics_file.flush()
 
-    def log_ood_metrics(self, in_scores: torch.Tensor, out_scores: torch.Tensor) -> Optional[Dict[str, float]]:
-        """
-        Computes and logs OOD metrics if enabled.
 
-        This method should be called after training (or at evaluation time) to log OOD detection performance.
+
+    def log_ood_metrics(
+            self,
+            label: torch.Tensor,
+            ood_score: torch.Tensor,
+            partition_strategy: str,
+            partition_info = None
+        ) -> Optional[Dict[str, float]]:
+        """
+        Computes and logs OOD metrics if enabled. Writes the metrics to a CSV file.
+
+        For internal partitions, 'partition_info' can be the number of in-distribution classes.
+        For external partitions, 'partition_info' is expected to be the OOD dataset name.
 
         Args:
-            in_scores (torch.Tensor): In-distribution scores.
-            out_scores (torch.Tensor): Out-of-distribution scores.
+            label: 1D array-like of ground truth labels, where 0 = in-distribution, 1 = OOD.
+            ood_score: 1D array-like of anomaly scores. Higher scores indicate a higher likelihood of being OOD.
+            partition_strategy (str): Either "internal" or "external".
+            partition_info (int or str, optional): For "internal", e.g. number of in-classes;
+                                                for "external", the OOD dataset name.
 
         Returns:
-            Optional[Dict[str, float]]: A dictionary containing computed OOD metrics, or None if OOD logging is disabled.
+            Optional[Dict[str, float]]: A dictionary containing computed OOD metrics,
+                                        or None if OOD logging is disabled.
         """
-        if not self.ood_logging or self.ood_metrics_calculator is None:
-            self.logger.info("OOD logging is not enabled.")
-            return None
-
-        metrics = self.ood_metrics_calculator(in_scores, out_scores)
+        # Compute the metrics using the OODMetricsCalculator.
+        metrics = self.ood_metrics_calculator.compute(label, ood_score)
         global_step = self.current_epoch if self.current_epoch is not None else 0
+
+        # Log to TensorBoard if enabled.
         for metric_name, value in metrics.items():
             if self.tensorboard_writer is not None:
                 self.tensorboard_writer.add_scalar(f'OOD/{metric_name}', value, global_step)
 
-        # Write OOD metrics to a separate CSV file.
-        ood_csv_path = os.path.join(self.output_path, 'ood_metrics.csv')
+        # Determine file name and header information based on partition strategy.
+        if partition_strategy.lower() == "internal":
+            # For internal partitions, we might use the number of in-distribution classes as identifier.
+            identifier = f"internal_{partition_info}" if partition_info is not None else "internal"
+            ood_csv_path = os.path.join(self.output_path, f'ood_metrics_{identifier}.csv')
+        elif partition_strategy.lower() == "external":
+            # For external partitions, use the provided OOD dataset name.
+            identifier = partition_info if partition_info is not None else "external"
+            ood_csv_path = os.path.join(self.output_path, f'ood_metrics_{identifier}.csv')
+        else:
+            # Default fallback.
+            ood_csv_path = os.path.join(self.output_path, 'ood_metrics.csv')
+
         write_header = not os.path.isfile(ood_csv_path)
         with open(ood_csv_path, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             if write_header:
-                writer.writerow(['Timestamp'] + list(metrics.keys()))
-            writer.writerow([datetime.now().strftime('%Y-%m-%d %H:%M:%S')] + list(metrics.values()))
+                # Optionally include a column for partition info.
+                header = ['Timestamp', 'Partition_Strategy', 'Partition_Info'] + list(metrics.keys())
+                writer.writerow(header)
+            row = [
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                partition_strategy,
+                partition_info if partition_info is not None else ""
+            ] + list(metrics.values())
+            writer.writerow(row)
+
         return metrics
+
 
     def log_reconstruction_images(self, original: torch.Tensor, reconstructed: torch.Tensor, epoch: int) -> None:
         """
@@ -294,3 +329,88 @@ class ExperimentLogger:
         if self.tensorboard_writer is not None:
             self.tensorboard_writer.close()
 
+# # Set up parameters.
+# model_tag = 'vae'         # For example, 'vae' for a variational autoencoder.
+# task_type = 'reconstruction'
+# hyperparameters = {'learning_rate': 0.001, 'epochs': 5, 'batch_size': 32}
+
+# # Initialize the experiment logger.
+# logger = ExperimentLogger(
+#     output_path='./logs',
+#     model_tag=model_tag,
+#     task_type=task_type,
+#     use_tensorboard=True,
+#     ood_logging=True  # Enable if you want to track OOD metrics.
+# )
+
+# # Save hyperparameters.
+# logger.save_hyperparameters(hyperparameters)
+
+# # (Create your model, optimizer, etc.)
+# # For demonstration, we define a dummy VAE-like model.
+# import torch.nn as nn
+
+# class DummyVAE(nn.Module):
+#     def __init__(self):
+#         super(DummyVAE, self).__init__()
+#         self.encoder = nn.Linear(10, 5)
+#         self.fc_mu = nn.Linear(5, 5)
+#         self.fc_logvar = nn.Linear(5, 5)
+#         self.decoder = nn.Linear(5, 10)
+
+#     def forward(self, x):
+#         h = torch.relu(self.encoder(x))
+#         mu = self.fc_mu(h)
+#         logvar = self.fc_logvar(h)
+#         std = torch.exp(0.5 * logvar)
+#         eps = torch.randn_like(std)
+#         z = mu + eps * std
+#         recon = torch.sigmoid(self.decoder(z))
+#         return recon, mu, logvar
+
+# model = DummyVAE()
+# optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters['learning_rate'])
+# num_epochs = hyperparameters['epochs']
+# import logging
+# from argparse import Namespace
+
+# # Set up your command-line logger.
+# cli_logger = logging.getLogger("experiment")
+# cli_logger.setLevel(logging.INFO)
+# cli_logger.addHandler(logging.StreamHandler())
+
+# # Define your hyperparameters and task type.
+# hyperparameters = {'learning_rate': 0.001, 'epochs': 5, 'batch_size': 32}
+# task_type = 'reconstruction'  # or 'classification'
+
+# # Initialize the logger.
+# logger = ExperimentLogger(
+#     output_path='./logs',
+#     task_type=task_type,
+#     logger=cli_logger,
+#     use_tensorboard=True,
+#     ood_logging=True
+# )
+
+# # Optionally, display hyperparameters for in-distribution training.
+# cmd_args = Namespace(model_type="vae", optimizer="adam", learning_rate=0.001,
+#                      number_of_epochs=5, batchsize=32, loss_function="mse", use_gpu=True)
+# logger.display_hyperparamter_for_in_data_training(cmd_args)
+# logger.save_hyperparameters(hyperparameters)
+# for epoch in range(1, hyperparameters['epochs'] + 1):
+#     logger.begin_epoch(epoch)
+
+#     # ... run training, compute metrics, etc.
+#     # For a reconstruction model, compute reconstruction error:
+#     reconstruction_error = 0.123  # Example value
+
+#     # Log the metric (for reconstruction, only one value is expected).
+#     logger.log_model_metrics(reconstruction_error)
+
+#     logger.end_epoch()
+# in_scores = torch.randn(100)   # Example tensor of in-distribution scores.
+# out_scores = torch.randn(100)  # Example tensor of OOD scores.
+# ood_results = logger.log_ood_metrics(in_scores, out_scores)
+# cli_logger.info(f"OOD Metrics: {ood_results}")
+
+# logger.close()
