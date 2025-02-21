@@ -4,9 +4,19 @@ from abc import ABC, abstractmethod
 
 import torch
 
-
 class BaseModel(ABC, torch.nn.Module):
     """Represents the abstract base class for all models."""
+
+     # Registry to automatically register subclasses.
+    _registry: dict[str, type["BaseModel"]] = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Automatically register subclasses that define a model_id attribute.
+        if hasattr(cls, "model_id"):
+            model_id = getattr(cls, "model_id")
+            cls._registry[model_id] = cls
+
     def __init__(self, task_type: str) -> None:
         """_Initializes a BaseModel instance."""
 

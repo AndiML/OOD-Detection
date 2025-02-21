@@ -1,74 +1,88 @@
-"""Represents a module containing the creation of the global model for the federated learning process."""
-import sys
+"""Represents a module containing the creation of the model for training on In-Data."""
+from argparse import Namespace
 import torch
 
-from ood_detection.src.models.vgg import Vgg11
+from ood_detection.src.models.base_model import BaseModel
 
-
-
-
-def create_global_model(
-        model_type: str,
-        dataset_kind: str,
-        data_class_instance, #Dataset,
-        tensor_shape_for_flattening: tuple[int, ...],
-        use_larger_model: bool = False
-) -> torch.nn.Module:
-    """Creates the global model for the federated learning process
+def create_model(data_class_instance:torch.utils.data.Dataset, command_line_arguments: Namespace) -> BaseModel:
+    """
+    Creates a model instance based on command-line arguments and dataset information.
 
     Args:
-        model_type (str): The type of model architecture to be used.
-        dataset_kind (str): The kind of dataset used in the federated learning process.
-        data_class_instance (Dataset): The instance of the class containing the dataset.
-        tensor_shape_for_flattening (tuple[int, ...]): The shape of single sample in the training to initialize the first linear layer of
-            a simple feed forward neural network.
-        use_larger_model (bool): Whether to use the larger VGG-11 model for training.
+        data_class_instance (torch.utils.data.Dataset): An instance of a dataset (or configuration) class that provides input_channels and input_size.
+        command_line_arguments (Namespace): Parsed command-line arguments that include `model_type` and any model-specific parameters.
 
     Returns:
-        torch.nn.Module: The global model for the federated learning process.
+        An instance of a model that is a subclass of BaseModel.
+
+    Raises:
+        ValueError: If no model is registered with the specified model_type.
     """
-    global_model: torch.nn.Module
-    if model_type == 'cnn':
-        # Convolutional neural network architecture
-        if dataset_kind == 'mnist':
-            img_size = tensor_shape_for_flattening
-            input_dimension = 1
-            for size_per_dimension in img_size:
-                input_dimension *= size_per_dimension
-        elif dataset_kind == 'cifar10' or dataset_kind == 'cifar100-super' or dataset_kind == 'cinic10':
-            if use_larger_model:
-                global_model = Vgg11(input_shape=data_class_instance.sample_shape, number_of_classes=data_class_instance.number_of_classes)
-            else:
-                global_model = CNNCifar10(
-                    number_of_channels=data_class_instance.sample_shape[0],
-                    output_classes=data_class_instance.number_of_classes
-                )
-        elif dataset_kind == 'cifar100' or dataset_kind == 'imagenet':
-            if use_larger_model:
-                global_model = Vgg11(input_shape=data_class_instance.sample_shape, number_of_classes=data_class_instance.number_of_classes)
-            else:
-                global_model = CNNCifar10(
-                    number_of_channels=data_class_instance.sample_shape[0],
-                    output_classes=data_class_instance.number_of_classes
-                )
-            # global_model = create_resnet50_cifar100(num_classes=data_class_instance.number_of_classes)
-            # CNNCifar100(input_shape=data_class_instance.sample_shape, output_classes=data_class_instance.number_of_classes)
-        else:
-            exit('Model not supported.')
+    # Get the model class from the registry using the model_type argument.
+    model_instance = BaseModel._registry.get(command_line_arguments.model_type)
+    if model_instance is None:
+        raise ValueError(f"Unknown model type: {command_line_arguments.model_type}. "
+                         f"Available types: {list(BaseModel._registry.keys())}")
 
-    elif model_type == 'mlp':
-        # Multi-layer perceptron
-        img_size = tensor_shape_for_flattening
-        input_dimension = 1
-        for size_per_dimension in img_size:
-            input_dimension *= size_per_dimension
-        global_model = None
-    elif model_type == 'classifier':
-        global_model = None
+    # Gather any additional model-specific parameters from the command-line arguments.
+    model_params = {}
+    sample_shape = data_class_instance.sample_shape
+    model_params["input_channels"] = sample_shape[0]
+    model_params["input_size"] = sample_shape[1]
+    model_params["latent_dim"] = command_line_arguments.latent_dim
+    model_params["min_feature_size"] = command_line_arguments.min_feature_size
+    model_params["base_channels"] = command_line_arguments.base_channels
+    model_params["noise_std"] = command_line_arguments.noise_std
 
-    elif model_type == 'encoder':
-        global_model = None
+    # Instantiate the model.
+    model = model_instance(**model_params)
+
+    return model
+
+def create_model(data_class_instance: torch.utils.data.Dataset, command_line_arguments: Namespace) -> BaseModel:
+    """
+    Creates a model instance based on command-line arguments and dataset information.
+    Supports both reconstruction models and classification models.
+
+    Args:
+        data_class_instance (torch.utils.data.Dataset): An instance of a dataset (or configuration) class that provides input_channels and input_size.
+        command_line_arguments (Namespace): Parsed command-line arguments that include the type of model and any model-specific parameters.
+
+    Returns:
+        An instance of a model that is a subclass of BaseModel.
+
+    Raises:
+        ValueError: If no model is registered with the specified model_type.
+
+    """
+    # Look up the model class from the registry.
+    model_class = BaseModel._registry.get(command_line_arguments.model_type)
+    if model_class is None:
+        raise ValueError(
+            f"Unknown model type: {command_line_arguments.model_type}. "
+            f"Available types: {list(BaseModel._registry.keys())}"
+        )
+
+    sample_shape = data_class_instance.sample_shape
+
+    # Common parameters
+    model_params = {"input_channels": sample_shape[0], "input_size": sample_shape[1]}
+
+    task_type = model_class.task_type
+    if task_type == "reconstruction":
+        model_params.update({
+            "latent_dim": command_line_arguments.latent_dim,
+            "min_feature_size": command_line_arguments.min_feature_size,
+            "base_channels": command_line_arguments.base_channels,
+            "noise_std": command_line_arguments.noise_std,
+        })
+    elif task_type == "classification":
+        model_params.update({
+            "num_classes": command_line_arguments.num_classes,
+        })
     else:
-        sys.exit('Architecture not supported')
+        raise ValueError(f"Unknown task_type: {command_line_arguments.task_type}")
 
-    return global_model
+    # Instantiate the model.
+    model = model_class(**model_params)
+    return model

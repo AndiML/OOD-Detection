@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ood_detection.src.models.base_model import BaseModel
-from ood_detection.src.helper.utils import compute_conv_output_size
+from ood_detection.src.utils.helper import compute_conv_output_size
 
 class AutoDynamicVariationalAutoencoder(BaseModel):
     """
@@ -19,15 +19,16 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
     """
 
     model_id = 'vae'
+    task_type = 'reconstruction'
 
     def __init__(self,
-                 input_channels: int,
-                 input_size: int,
-                 latent_dim: int,
-                 min_feature_size: int = 4,
-                 base_channels: int = 32,
-                 noise_std: float = 0.0,
-        ) -> None:
+        input_channels: int,
+        input_size: int,
+        latent_dim: int,
+        min_feature_size: int,
+        base_channels: int,
+        noise_std: float,
+    ) -> None:
         """
         Initializes the AutoDynamicVariationalAutoencoder instance.
 
@@ -49,7 +50,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
         elif input_size <= 100:
             min_feature_size = 8 if min_feature_size is None else min_feature_size
             base_channels = 64 if base_channels is None else base_channels
-        else:  # input_size > 100
+        else:
             min_feature_size = 16 if min_feature_size is None else min_feature_size
             base_channels = 128 if base_channels is None else base_channels
 
@@ -156,7 +157,7 @@ class AutoDynamicVariationalAutoencoder(BaseModel):
         for layer in self.decoder_deconvs:
             x = F.relu(layer(x))
         # Use sigmoid to constrain the output in [0, 1] (assuming normalized images).
-        reconstruction = x
+        reconstruction = F.sigmoid(x)
         return reconstruction, mu, logvar
 
     def decode(self, z: torch.Tensor = None, mu: torch.Tensor = None, logvar: torch.Tensor = None) -> torch.Tensor:

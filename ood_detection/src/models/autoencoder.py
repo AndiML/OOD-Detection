@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.nn.functional
 
 from ood_detection.src.models.base_model import BaseModel
-from ood_detection.src.helper.utils import compute_conv_output_size
+from ood_detection.src.utils.helper import compute_conv_output_size
 
 
 
@@ -22,14 +22,15 @@ class AutoDynamicAutoencoder(BaseModel):
     """
 
     model_id = 'ae'
+    task_type = 'reconstruction'
 
     def __init__(self,
         input_channels: int,
         input_size: int,
         latent_dim: int,
-        min_feature_size: int =  None,
-        base_channels: int = None,
-        noise_std: float = 0.0) -> None:
+        min_feature_size: int,
+        base_channels: int,
+        noise_std: float) -> None:
         """
         Initializes the autoencoder.
 
@@ -37,7 +38,7 @@ class AutoDynamicAutoencoder(BaseModel):
             input_channels (int): Number of channels in the input image.
             input_size (int): Spatial size of the input image (assuming square images.
             latent_dim (int): The dimensionality of the latent representation.
-            min_feature_size (int, optional): The minimum spatial dimension allowed in the encoder.
+            min_feature_size (int): The minimum spatial dimension allowed in the encoder.
                                               If None, defaults are chosen based on input_size.
             base_channels (int, optional): The number of output channels for the first convolution.
                                            If None, defaults are chosen based on input_size.
@@ -57,7 +58,6 @@ class AutoDynamicAutoencoder(BaseModel):
             base_channels = 128 if base_channels is None else base_channels
 
         self.encoder_convs = nn.ModuleList()
-        # Save pairs (in_channels, out_channels) for later mirror building.
         encoder_channels = []
 
         current_channels = input_channels
@@ -78,10 +78,9 @@ class AutoDynamicAutoencoder(BaseModel):
             # Update for next layer.
             current_channels = out_channels
             current_size = compute_conv_output_size(current_size, kernel_size=3, stride=2, padding=1)
-            out_channels *= 2  # Example rule: double the channels each time.
-
+            out_channels *= 2
         self.final_channels = current_channels
-        self.feature_map_size = current_size  # Final spatial size from encoder.
+        self.feature_map_size = current_size
 
         # Fully connected layers to bridge between conv feature maps and latent space.
         self.fc_enc = nn.Linear(self.final_channels * self.feature_map_size * self.feature_map_size, latent_dim)
