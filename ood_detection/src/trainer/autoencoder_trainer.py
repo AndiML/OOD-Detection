@@ -6,8 +6,6 @@ from ood_detection.src.trainer.base_trainer import BaseTrainer
 class AETrainer(BaseTrainer):
     """
     Trainer for a basic Autoencoder (AE).
-    Uses Mean Squared Error (MSE) loss to train an autoencoder model.
-
     """
     trainer_id = 'ae'
 
@@ -50,7 +48,7 @@ class AETrainer(BaseTrainer):
         )
 
         # Use MSE loss for reconstruction.
-        self.criterion = torch.nn.MSELoss(reduction='sum')
+        self.criterion = torch.nn.BCELoss()
 
     def train_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> float:
         """
@@ -91,7 +89,8 @@ class AETrainer(BaseTrainer):
 
         return {'loss': loss.item()}
 
-    def compute_anomaly(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+
+    def compute_ood_score_batch(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
         For an autoencoder, anomaly scores are computed as the reconstruction error.
         Returns:
@@ -102,6 +101,7 @@ class AETrainer(BaseTrainer):
             reconstruction = self.model(batch.to(self.device))
             error = self.criterion(reconstruction, batch.to(self.device))
             # Sum error over all non-batch dimensions
-            anomaly_score = error.view(error.size(0), -1).sum(dim=1)
+            error = error.view(error.size(0), -1).sum(dim=1)
 
-        return anomaly_score
+        return error
+

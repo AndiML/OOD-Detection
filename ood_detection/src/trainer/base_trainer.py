@@ -76,19 +76,6 @@ class BaseTrainer(ABC):
         self.best_epoch = 0
 
     @abstractmethod
-    def compute_anomaly(self, batch:  tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
-        """
-        Computes the anomaly score for each batch.
-
-        Args:
-            batch ( tuple[torch.Tensor, torch.Tensor]): Input batch.
-
-        Returns:
-            torch.Tensor: A 1D tensor of anomaly scores, one per sample.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     def train_step(self, batch: tuple[torch.Tensor, torch.Tensor]) ->  dict[str, float]:
         """
         Performs a single training step (forward, loss computation, backward, optimizer step)
@@ -116,6 +103,40 @@ class BaseTrainer(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def compute_ood_score_batch(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """
+        Computes OOD score for each batch.
+        Returns:
+            A 1D tensor of ood scores (one per sample).
+        """
+
+        raise NotImplementedError
+
+
+    def compute_ood_scores(self, test_loader: torch.utils.data.Dataloader):
+        """
+        Iterates over a test DataLoader and computes anomaly scores and labels.
+
+        Args:
+            test_loader (torch.utils.data.Dataloader): The DataLoader to iterate over.
+
+        Returns:
+            tuple: (all_scores, all_labels) as concatenated tensors.
+        """
+        all_scores = []
+        all_labels = []
+
+        with torch.no_grad():
+            for x, labels in test_loader:
+                x = x.to(self.device)
+                anomaly_scores = self.compute_ood_score_sample(x)
+                all_scores.append(anomaly_scores.cpu())
+                all_labels.append(labels.cpu())
+
+        all_scores = torch.cat(all_scores)
+        all_labels = torch.cat(all_labels)
+        return all_scores, all_labels
 
     def train(self):
         """Executes the entire training loop."""
@@ -160,7 +181,7 @@ class BaseTrainer(ABC):
             epoch_metrics = {
                 k: v / self.num_train_batches for k, v in running_metrics.items()
             }
-            self.training_logger.info("Epoch %d Average Training Metrics: %s", epoch, epoch_metrics,  extra={'end_section': True})
+            self.training_logger.info("Epoch %d Average Training Metrics: %s", epoch, epoch_metrics)
 
             # Log training metrics via the experiment logger if provided
             self.experiment_logger.begin_epoch(epoch)
@@ -194,6 +215,7 @@ class BaseTrainer(ABC):
                     for key, value in metrics.items():
                         running_metrics[key] += value
                     progress.update(task, advance=1)
+
 
         # Average the metrics
         avg_metrics = {

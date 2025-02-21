@@ -12,7 +12,6 @@ class VAETrainer(BaseTrainer):
 
     """
     trainer_id = 'vae'
-    name = 'Variational AutoEncoder'
 
     def __init__(
         self,
@@ -65,8 +64,8 @@ class VAETrainer(BaseTrainer):
             torch.Tensor: The total loss.
         """
 
-        reconstruction_loss = torch.nn.functional.mse_loss(x_hat, x, reduction='sum')
-        kl_divergence_posterior_prior = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        reconstruction_loss = torch.nn.functional.binary_cross_entropy(x_hat, x)
+        kl_divergence_posterior_prior = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), axis=1).mean()
 
         return reconstruction_loss + kl_divergence_posterior_prior
 
@@ -108,27 +107,30 @@ class VAETrainer(BaseTrainer):
 
         return {'loss': loss.item()}
 
-    def compute_anomaly(self, x: torch.Tensor) -> torch.Tensor:
+    def compute_ood_score_batch(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Computes the anomaly score for each sample in x.
-
-        For a VAE, a common choice is the reconstruction error.
-        This function computes the mean squared error (MSE) per sample.
+        Computes the negative ELBO for each sample in x.
+        The negative ELBO is used as the OOD score: lower ELBO (i.e., higher negative ELBO) indicates a potential anomaly.
 
         Args:
             x (torch.Tensor): Input batch.
 
         Returns:
-            torch.Tensor: A 1D tensor of anomaly scores, one per sample.
+            torch.Tensor: A 1D tensor of negative ELBO scores, one per sample.
         """
         self.model.eval()
         with torch.no_grad():
-            # Get model outputs along with the latent statistics.
-            outputs, _, _ = self.model(x)
-            # Compute reconstruction loss per pixel without summing across batch.
-            # Using 'none' reduction gives a loss per element.
-            loss_per_element = torch.nn.functional.mse_loss(outputs, x, reduction='none')
-            # Sum over non-batch dimensions to obtain one score per sample.
-            # Assuming x has shape (B, C, H, W)
-            anomaly_scores = loss_per_element.view(loss_per_element.size(0), -1).sum(dim=1)
-        return anomaly_scores
+            outputs, mu, logvar = self.model(x)
+            # Compute reconstruction loss per sample without summing across the batch.
+            recon_loss = torch.nn.functional.binary_cross_entropy(outputs, x, reduction='none')
+            recon_loss = recon_loss.view(recon_loss.size(0), -1).sum(dim=1)
+
+            # Compute KL divergence per sample.
+            kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
+
+            # Negative ELBO per sample.
+            neg_ellbo = -(recon_loss + kl_div)
+
+        return neg_ellbo
+
+
