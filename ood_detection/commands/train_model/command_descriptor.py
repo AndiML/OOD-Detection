@@ -229,7 +229,7 @@ class TrainModelCommandDescriptor(BaseCommandDescriptor):
             '-d',
             '--latent_dim',
             type=int,
-            default=32,
+            default=100,
             help='Dimensionality of the latent representation in reconstruction based models.'
         )
 
@@ -245,7 +245,7 @@ class TrainModelCommandDescriptor(BaseCommandDescriptor):
             '--base_channels',
             type=int,
             default=None,
-            help='Minimum feature size (optional).'
+            help='Minimum base channels.'
         )
 
         parser.add_argument(

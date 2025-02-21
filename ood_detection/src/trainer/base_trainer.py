@@ -114,7 +114,7 @@ class BaseTrainer(ABC):
         raise NotImplementedError
 
 
-    def compute_ood_scores(self, test_loader: torch.utils.data.Dataloader):
+    def compute_ood_scores(self, test_loader):
         """
         Iterates over a test DataLoader and computes anomaly scores and labels.
 
@@ -130,7 +130,7 @@ class BaseTrainer(ABC):
         with torch.no_grad():
             for x, labels in test_loader:
                 x = x.to(self.device)
-                anomaly_scores = self.compute_ood_score_sample(x)
+                anomaly_scores = self.compute_ood_score_batch(x)
                 all_scores.append(anomaly_scores.cpu())
                 all_labels.append(labels.cpu())
 
@@ -176,6 +176,7 @@ class BaseTrainer(ABC):
                     avg_metrics_str = " ".join(f"{k}:{(v / batch_idx):.4f}" for k, v in running_metrics.items())
                     # Update progress bar: advance one batch and update description with metrics.
                     progress.update(task, advance=1, description=f"Epoch {epoch}/{self.num_epochs} | {avg_metrics_str}")
+                    break
 
             # Computes average metrics for the entire epoch
             epoch_metrics = {

@@ -37,12 +37,12 @@ class OODMetricsCalculator:
         auroc = roc_auc_score(y_true, y_score)
 
         # 2. Compute AUPR-OUT (with OOD as positive)
-        precision_out, recall_out, _ = precision_recall_curve(y_true, (-1)*y_score, pos_label=1)
+        precision_out, recall_out, _ = precision_recall_curve(y_true, y_score, pos_label=1)
         aupr_out = auc(recall_out, precision_out)
 
         # 3. Compute AUPR-IN (with in-distribution as positive)
         # Invert scores and labels: in-distribution becomes positive.
-        precision_in, recall_in, _ = precision_recall_curve(1 - y_true, 1 - y_score, pos_label=1)
+        precision_in, recall_in, _ = precision_recall_curve(1 - y_true, -y_score, pos_label=1)
         aupr_in = auc(recall_in, precision_in)
 
         # 4. Compute FPR at 95% TPR
