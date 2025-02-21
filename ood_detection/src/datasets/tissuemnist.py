@@ -30,7 +30,7 @@ class TissueMnist(Dataset):
         self.path = path
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.10204482,), (0.10002608,))
+            # torchvision.transforms.Normalize((0.10204482,), (0.10002608,))
         ])
         self._load_datasets()
         # If load_data is True, load the full dataset. Otherwise, skip it.
@@ -133,7 +133,7 @@ class TissueMnist(Dataset):
         Returns:
             tuple[int, ...]: Returns a tuple that contains the sizes of all dimensions of the samples.
         """
-        return tuple(1, 28, 28)
+        return tuple([1, 28, 28])
 
     @property
     def number_of_classes(self) -> int:

@@ -26,7 +26,7 @@ class DermaMnist(Dataset):
         self.name = 'DermaMNIST'
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.76311266,), (0.13660511,))
+            # torchvision.transforms.Normalize((0.76311266,), (0.13660511,))
         ])
 
         # If load_data is True, load the full dataset. Otherwise, skip it.
@@ -129,7 +129,7 @@ class DermaMnist(Dataset):
         Returns:
             tuple[int, ...]: Returns a tuple that contains the sizes of all dimensions of the samples.
         """
-        return tuple(3, 28, 28)
+        return tuple([3, 28, 28])
 
     @property
     def number_of_classes(self) -> int:
