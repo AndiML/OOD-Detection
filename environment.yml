@@ -1,0 +1,37 @@
+name:  ood-detection
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - tensorboard=2.15.0
+  - python=3.11.4
+  - wget=1.21.4
+  - pip=23.2.1
+  - numpy=1.25.2
+  - pytorch=2.0.1
+  - pytorch-cuda=11.8
+  - torchvision=0.15.2
+  - scipy=1.11.1
+  - scikit-learn=1.2.2
+  - matplotlib=3.7.1
+  - pandas=2.0.3
+  - pandas-stubs=2.0.3.230814
+  - tqdm=4.66.1
+  - types-tqdm=4.66.0.2
+  - psutil=5.9.5
+  - types-psutil=5.9.5.6
+  - pylint=2.16.2
+  - mkl=2023.2.0
+  - pycodestyle=2.11.0
+  - mypy=1.4.1
+  - yaml=0.2.5
+  - pyyaml=6.0.1
+  - types-pyyaml=6.0.12.11
+  - imbalanced-learn=0.12.0
+  - pip:
+      - pydoclint==0.3.2
+      - medmnist==3.0.2
+      - rich==13.9.4
+      - wget
