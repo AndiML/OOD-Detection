@@ -283,27 +283,27 @@ class ExperimentLogger:
             reconstructed (torch.Tensor): A batch of reconstructed images (shape: [B, C, H, W]).
             epoch (int): The current epoch number, used for logging.
         """
+        # Use only a subset of images
+        batch_size = original.shape[0]
+        num_images = max(8, batch_size)
+        original_subset = original[:num_images]
+        reconstructed_subset = reconstructed[:num_images]
+
         # Create image grids for original and reconstructed images.
-        orig_grid = torchvision.utils.make_grid(original)
-        recon_grid = torchvision.utils.make_grid(reconstructed)
+        orig_grid = torchvision.utils.make_grid(original_subset)
+        recon_grid = torchvision.utils.make_grid(reconstructed_subset)
+
+        # Concatenate grids along the width (dim=2) to form a combined image.
+        combined_grid = torch.cat([orig_grid, recon_grid], dim=2)
 
         if self.tensorboard_writer is not None:
-            # Log images using TensorBoard.
-            self.tensorboard_writer.add_image('Original', orig_grid, epoch)
-            self.tensorboard_writer.add_image('Reconstructed', recon_grid, epoch)
+            self.tensorboard_writer.add_image('Original_vs_Reconstructed', combined_grid, epoch)
         else:
-            # Save images to disk.
             images_dir = os.path.join(self.output_path, "images")
             os.makedirs(images_dir, exist_ok=True)
-
-            # Convert tensor grids to PIL images.
             to_pil = torchvision.transforms.ToPILImage()
-            orig_img = to_pil(orig_grid)
-            recon_img = to_pil(recon_grid)
-
-            # Save the images with epoch-based filenames.
-            orig_img.save(os.path.join(images_dir, f'epoch_{epoch}_original.png'))
-            recon_img.save(os.path.join(images_dir, f'epoch_{epoch}_reconstructed.png'))
+            combined_img = to_pil(combined_grid)
+            combined_img.save(os.path.join(images_dir, f'epoch_{epoch}_combined.png'))
 
 
     def set_state(self, state: dict) -> None:
