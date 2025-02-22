@@ -89,6 +89,26 @@ class AETrainer(BaseTrainer):
 
         return {'loss': loss.item()}
 
+    def post_validation(self, last_batch: tuple[torch.Tensor, torch.Tensor], epoch: int) -> None:
+        """
+        Process the last validation batch to log reconstruction images.
+
+        After the validation phase, this hook computes the reconstructed outputs for the
+        last batch and logs both the original and reconstructed images via the experiment logger.
+
+        Args:
+            last_batch (tuple[torch.Tensor, torch.Tensor]): The last batch from validation.
+            epoch (int): The current epoch number.
+        """
+        inputs, _ = last_batch
+        inputs = inputs.to(self.device)
+        with torch.no_grad():
+            outputs= self.model(inputs)
+
+        inputs = inputs.detach().cpu()
+        outputs = outputs.detach().cpu()
+
+        self.experiment_logger.log_reconstruction_images(inputs, outputs, epoch=epoch)
 
     def compute_ood_score_batch(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
