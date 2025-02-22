@@ -64,7 +64,8 @@ The framework is designed to support multiple neural network architectures for O
 
 - **VAE (Variational Autoencoder):** A reconstruction-based model ideal for unsupervised learning.
 - **VAE with Noise:** A variant of the VAE model that includes noise injection (controlled by the `--noise_std` parameter) for robustness testing.
-- *(Additional models can be added by extending the `MODEL_IDS` and related model generator utilities.)*
+- **Diffusion Model:** A model based on diffusion processes for image generation and reconstruction.
+Additional model architectures can be integrated seamlessly by extending the base model class and updating the `MODEL_IDS` and model generator utilities accordingly.
 
 ---
 
