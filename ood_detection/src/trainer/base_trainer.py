@@ -104,6 +104,22 @@ class BaseTrainer(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def post_validation(self, last_batch: tuple[torch.Tensor, torch.Tensor], epoch: int):
+        """
+        Hook to allow subclasses to process the last batch after the validation phase.
+
+        This method is called at the end of the validation loop, providing the last
+        batch processed and the current epoch number.
+
+        Args:
+            last_batch (tuple[torch.Tensor, torch.Tensor]): The last batch of data processed
+                during validation.
+            epoch (int): The current epoch number.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod
     def compute_ood_score_batch(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
         Computes OOD score for each batch.
@@ -211,11 +227,14 @@ class BaseTrainer(ABC):
                 transient=True
             ) as progress:
                 task = progress.add_task("Validation", total=self.num_val_batches)
+                # Stores last batch for reconstruction visualization
+                last_batch = None
                 for batch in self.val_loader:
                     metrics = self.validation_step(batch)
                     for key, value in metrics.items():
                         running_metrics[key] += value
                     progress.update(task, advance=1)
+                    last_batch = batch
 
 
         # Average the metrics
@@ -235,25 +254,35 @@ class BaseTrainer(ABC):
         self.experiment_logger.log_model_metrics(avg_metrics)
         self.experiment_logger.end_epoch()
 
+
         # Check if the current validation loss is the best so far.
         current_val_loss = avg_metrics['loss']
         if current_val_loss is not None:
             if current_val_loss < self.best_val_loss:
-                # Delete the previous best model if it exists.
-                if hasattr(self, 'best_model_path') and self.best_model_path and os.path.exists(self.best_model_path):
-                    os.remove(self.best_model_path)
-                    self.training_logger.info("Deleted previous best model")
+                # Clear the model directory so that only the best model remains.
+                if os.path.exists(self.model_directory):
+                    for file in os.listdir(self.model_directory):
+                        file_path = os.path.join(self.model_directory, file)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                    self.training_logger.info("Cleared model directory: %s", self.model_directory)
+                else:
+                    os.makedirs(self.model_directory, exist_ok=True)
 
                 self.best_val_loss = current_val_loss
                 self.best_epoch = current_epoch
-                # Annotate the filename with the epoch and loss value
-                best_model_filename = f"best_model_epoch_{current_epoch}_loss_{round(current_val_loss,2):.2f}.pt"
+
+                # Get the model name from the model's class name.
+                model_name = self.model.model_id
+                best_model_filename = f"{model_name}_best_model_epoch_{current_epoch}.pt"
                 self.best_model_path = os.path.join(self.model_directory, best_model_filename)
                 self.save_model(self.best_model_path)
                 self.training_logger.info(
-                    "Best model updated at epoch %d with validation loss: %.2f",
-                    current_epoch, current_val_loss, extra={'end_section': True}
+                    "Best model updated at epoch %d for model %s",
+                    current_epoch, model_name, extra={'end_section': True}
                 )
+
+        self.post_validation(last_batch, current_epoch)
 
         # Switch back to training mode
         self.model.train()
