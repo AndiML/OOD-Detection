@@ -14,11 +14,11 @@ from ood_detection.src.trainer.trainer_generator import create_trainer_from_mode
 from ood_detection.src.training_config.configurator import get_optimizer, get_scheduler
 
 
-class TrainModelCommand(BaseCommand):
-    """Represents a command that represents the train model command."""
+class OODPipelineCommand(BaseCommand):
+    """Represents a command that represents the  OODPipeline command."""
 
     def __init__(self) -> None:
-        """Initializes a new TrainModel instance. """
+        """Initializes a new OODPipeline instance. """
 
         self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
 
@@ -28,6 +28,7 @@ class TrainModelCommand(BaseCommand):
         Args:
             command_line_arguments (Namespace): The parsed command line arguments.
         """
+
          # Log dataset download and configuration.
         self.logger.info("Downloading in-distribution dataset: %s",command_line_arguments.in_dataset.upper())
         in_dataset_instance = Dataset.create(command_line_arguments.in_dataset, command_line_arguments.dataset_path)
@@ -93,10 +94,7 @@ class TrainModelCommand(BaseCommand):
             training_logger=self.logger,
             experiment_logger=experiment_logger
         )
-
         trainer.train()
-
-
 
         if command_line_arguments.partition_method.lower() == "internal":
             self.logger.info(
@@ -132,3 +130,63 @@ class TrainModelCommand(BaseCommand):
                 all_scores, all_labels = trainer.compute_ood_scores(test_loader)
                 experiment_logger.log_ood_metrics(all_labels, all_scores, partition_strategy="external", partition_info=ood_id)
 
+            exit()
+
+        # # Save the training and validation metrics to a CSV file.
+        # with open(metrics_filename, mode='w', newline='') as csv_file:
+        #     fieldnames = ['epoch', 'train_loss', 'val_loss']
+        #     writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        #     writer.writeheader()
+        #     for epoch in range(num_epochs):
+        #         writer.writerow({
+        #             'epoch': epoch + 1,
+        #             'train_loss': train_losses[epoch],
+        #             'val_loss': val_losses[epoch]
+        #         })
+        # print(f"Metrics saved to {metrics_filename}")
+
+        # # ------------------------------
+        # # Variational Inference Section
+        # # ------------------------------
+        # model.eval()
+        # with torch.no_grad():
+        #     print("Performing variational inference on test data...")
+        #     for batch_idx, (inputs, _) in enumerate(test_loader):
+        #         inputs = inputs.to(device)
+        #         reconstruction, mu, logvar = model(inputs)
+
+        #         # Print latent variables.
+        #         print(f"Sample {batch_idx}:")
+        #         print("Latent mean (mu):", mu.cpu().numpy())
+        #         print("Latent log variance (logvar):", logvar.cpu().numpy())
+
+        #         # Sample a latent vector using reparameterization.
+        #         std = torch.exp(0.5 * logvar)
+        #         eps = torch.randn_like(std)
+        #         z = mu + eps * std
+        #         print("Sampled latent vector (z):", z.cpu().numpy())
+
+        #         # Visualize and save original and reconstructed images.
+        #         # Assuming the image tensor shape is (batch, channels, height, width).
+        #         original = inputs[0].cpu().numpy().transpose(1, 2, 0)
+        #         reconstructed = reconstruction[0].cpu().numpy().transpose(1, 2, 0)
+
+        #         plt.figure(figsize=(8, 4))
+        #         plt.subplot(1, 2, 1)
+        #         plt.imshow(original.squeeze(), cmap='gray' if input_shape[0] == 1 else None)
+        #         plt.title("Original")
+        #         plt.axis('off')
+        #         plt.subplot(1, 2, 2)
+        #         plt.imshow(reconstructed.squeeze(), cmap='gray' if input_shape[0] == 1 else None)
+        #         plt.title("Reconstructed")
+        #         plt.axis('off')
+
+        #         # Save the inference image with an experiment-specific filename.
+        #         image_path = os.path.join(inference_dir, f"{experiment_name}_sample_{batch_idx}.png")
+        #         plt.savefig(image_path)
+        #         plt.close()
+        #         print(f"Saved inference image: {image_path}")
+
+        #         # Process only a few samples (e.g., break after 3 samples).
+        #         if batch_idx >= 2:
+        #             break

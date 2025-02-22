@@ -8,8 +8,8 @@ from ood_detection.src.models import MODEL_IDS, DEFAULT_MODEL_ID
 from ood_detection.src.training_config import OPTIMIZER_IDS, DEFAULT_OPTIMIZER_ID, SCHEDULER_IDS, DEFAULT_SCHEDULER_ID
 
 
-class TrainModelCommandDescriptor(BaseCommandDescriptor):
-    """Represents the description of the train model command."""
+class OODPipelineCommandDescriptor(BaseCommandDescriptor):
+    """Represents the description of the OOD Pipeline command."""
 
     def get_name(self) -> str:
         """Gets the name of the command.
@@ -17,7 +17,7 @@ class TrainModelCommandDescriptor(BaseCommandDescriptor):
         Returns:
             str: Returns the name of the command.
         """
-        return 'train-model'
+        return 'ood-pipeline'
 
     def get_description(self) -> str:
         """Gets the description of the command.
