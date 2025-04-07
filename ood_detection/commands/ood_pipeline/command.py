@@ -1,7 +1,7 @@
+import os
 import logging
 from datetime import datetime
 from argparse import Namespace
-import os
 
 
 from ood_detection.commands.base import BaseCommand
@@ -92,7 +92,8 @@ class OODPipelineCommand(BaseCommand):
             experiment_path=training_dir,
             scheduler=scheduler,
             training_logger=self.logger,
-            experiment_logger=experiment_logger
+            experiment_logger=experiment_logger,
+            enhanced_ood=command_line_arguments.enhanced_ood
         )
         trainer.train()
 

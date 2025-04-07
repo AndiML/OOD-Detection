@@ -255,3 +255,46 @@ class OODPipelineCommandDescriptor(BaseCommandDescriptor):
             default=0.0,
             help='Standard deviation of noise added to the input image.'
         )
+
+         # Enhanced OOD detection arguments for score matching.
+        parser.add_argument(
+            '--enhanced_ood',
+            action='store_true',
+            help='If set, use the enhanced OOD detection method with score matching and Langevin dynamics.'
+        )
+
+        parser.add_argument(
+            '--score_epochs',
+            type=int,
+            default=10,
+            help='Number of training epochs for the latent score network.'
+        )
+
+        parser.add_argument(
+            '--score_lr',
+            type=float,
+            default=1e-3,
+            help='Learning rate for training the latent score network.'
+        )
+
+        parser.add_argument(
+            '--score_noise_std',
+            type=float,
+            default=0.03,
+            help='Standard deviation of Gaussian noise for training the latent score network.'
+        )
+
+        parser.add_argument(
+            '--ld_step_size',
+            type=float,
+            default=0.1,
+            help='Step size for Langevin dynamics in enhanced OOD detection.'
+        )
+
+        parser.add_argument(
+            '--ld_num_steps',
+            type=int,
+            default=50,
+            help='Number of steps for Langevin dynamics in enhanced OOD detection.'
+        )
+
