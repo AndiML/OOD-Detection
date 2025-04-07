@@ -94,7 +94,7 @@ Key command-line arguments include:
   - `--in_dataset` – Name of the in-distribution dataset. For medical imaging applications, you might use:
     - `pathmnist` for a MedMNIST variant.
     - `nih_chest_xrays` when training on chest X-ray data.
-  - `--ood_datasets` – List of OOD dataset IDs. For external evaluation, you might supply a list such as `tissuemnist` and `chestminst` (or other MedMNIST Datasets).
+  - `--ood_datasets` – List of OOD dataset IDs. For external evaluation, you might supply a list such as `tissuemnist` and `chestmnist` (or other MedMNIST Datasets).
   - `--partition_method` – Partitioning method:
     - `"internal"` reserve a subset of in-distribution classes, such as specific conditions within MedMNIST or
     - `"external"` use separate OOD datasets.
@@ -124,7 +124,7 @@ python -m ood_detection ood-pipeline \
   /path/to/output \
   /path/to/dataset \
   --in_dataset pathmnist \
-  --ood_datasets tissuemnist chestminst \
+  --ood_datasets tissuemnist chestmnist \
   --model_type vae \
   --epochs 10 \
   --batchsize 64 \
@@ -135,7 +135,7 @@ python -m ood_detection ood-pipeline \
 
 This command will:
 - Download/configure the MedMNIST (`pathmnist`) dataset.
-- Pre-process external OOD datasets (`tissuemnist` and `chestminst`) to match the inlier channel dimensions (via channel selection or replication).
+- Pre-process external OOD datasets (`tissuemnist` and `chestmnist`) to match the inlier channel dimensions (via channel selection or replication).
 - Instantiate a VAE with a 100-dimensional latent space.
 - Train the model for 10 epochs.
 - Log training and OOD evaluation metrics.
