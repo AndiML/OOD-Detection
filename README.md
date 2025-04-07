@@ -59,13 +59,9 @@ conda env export | grep -v "prefix" | grep -v "numpy" > environment.yaml
 ## Supported Models
 
 The framework supports multiple neural network architectures for OOD detection. Currently, the supported models (defined in the module `ood_detection.src.models`) include, for example:
-
 - **VAE (Variational Autoencoder):** A reconstruction-based model ideal for unsupervised learning.
 - **VAE with Noise:** A variant of the VAE model that includes noise injection (controlled by the `--noise_std` parameter) for robustness testing.
-- **Diffusion Model:** A model based on diffusion processes for image generation and reconstruction.
-- **VAE (Variational Autoencoder):** A reconstruction-based model ideal for unsupervised learning.
-- **VAE with Noise:** A variant of the VAE model that includes noise injection (controlled by the `--noise_std` parameter) for robustness testing.
-- **Enhanced VAE with Score Matching:** Extends the VAE with a latent score matching mechanism. By enabling the `--enhanced_ood` flag along with additional parameters (e.g., `--score_epochs`, `--score_lr`, `--score_noise_std`, `--ld_step_size`, `--ld_num_steps`), the model refines its latent space using denoising score matching and Langevin dynamics to improve OOD detection.
+- **Enhanced VAE with Score Matching:** Extends the VAE with a latent score matching mechanism. By enabling the `--enhanced_ood` flag along, the model refines its latent space using denoising score matching and Langevin dynamics to improve OOD detection.
 
 Additional model architectures can be integrated seamlessly by extending the base model class and updating the `MODEL_IDS` and model generator utilities accordingly.
 
